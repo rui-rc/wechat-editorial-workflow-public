@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+output/
+evidence/
+logs/
+browser-profile/
+selenium-cache/
+*.zip
+
+# Institutional assets are fetched locally, never redistributed here.
+wechat-editorial-workflow/requirements/assets/

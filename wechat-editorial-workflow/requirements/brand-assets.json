@@ -1,0 +1,39 @@
+{
+  "source_article": "https://mp.weixin.qq.com/s/hi1RVoLO5tvHFihEQxBHFQ",
+  "account": "湖南大学法学院",
+  "assets": [
+    {
+      "role": "header",
+      "path": "assets/hnu-law-header.jpg",
+      "source_url": "https://mmbiz.qpic.cn/sz_mmbiz_jpg/FwpbaYfdD8icZmic0ibXAg16TdbclJ40TCicuAUxhO69e1a4Lk9DtMwZMlORLvaC4FEibmtqsPOyianw9QgEpw7FY7qicqyYGticJX5OrKIfwvSFpN0/640?wx_fmt=jpeg&from=appmsg",
+      "article_image_index": 0,
+      "format": "JPEG",
+      "width": 870,
+      "height": 150,
+      "frames": 1,
+      "sha256": "5398b700d031f85c7c350b530832e33563567f448621ecd0e0f8b6c2b3d631db"
+    },
+    {
+      "role": "closing_mark",
+      "path": "assets/hnu-law-closing-mark.png",
+      "source_url": "https://mmbiz.qpic.cn/sz_mmbiz_png/FwpbaYfdD8icBkCPyN8iahAxqZkjmib3QSMbZGiaJIPQhg1wgAYSka5KvQC18AX0cIRGfILSTylcu5rcSbWyckQbg2Lo6qvMy1v2rjVqKcJ6ibEs/640?wx_fmt=png&from=appmsg",
+      "article_image_index": 13,
+      "format": "PNG",
+      "width": 295,
+      "height": 115,
+      "frames": 1,
+      "sha256": "5dcff1f0807bc8b0684f7f1ba554ece2ffeda2eef6f8023166b91e722c6bb12e"
+    },
+    {
+      "role": "footer",
+      "path": "assets/hnu-law-footer.jpg",
+      "source_url": "https://mmbiz.qpic.cn/sz_mmbiz_jpg/FwpbaYfdD88QMFlpyHL2gWELbsxhk5KNwiaCriaOKhNdgl9iaY0dq0LckZy0GAwGMFvMEGO4fK7gibaJGyvf6polHg5drnkEHYuhQ5uk21Qbl0Y/640?wx_fmt=jpeg&from=appmsg",
+      "article_image_index": 14,
+      "format": "JPEG",
+      "width": 1080,
+      "height": 629,
+      "frames": 1,
+      "sha256": "f57233e29a4cbe3495b28be45e19ff02e14b7b200d59111d4fe21144ed3ce1e4"
+    }
+  ]
+}
