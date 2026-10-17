@@ -58,7 +58,7 @@ after = reopen(driver)
 
 ## 学院固定规范
 
-制作前读取 `wechat-editorial-workflow/references/fixed-layout.md`，使用compose_article生成正文、三张品牌图和三级栏位；保存后用audit_article结合内容清单核验。不能以同会话连接成功代替学院格式验收。
+制作前读取学院要求并按内容选择路线。基础HTML稿可按 `wechat-editorial-workflow/references/fixed-layout.md` 使用compose_article生成，保存后用audit_article结合内容清单核验；原生卡片按 `wechat-editorial-workflow/references/native-cards.md` 在组件之间插入、局部编辑并复核，不强制转成HTML。不能以同会话连接成功代替学院格式验收。
 
 ## 获取学院品牌素材
 

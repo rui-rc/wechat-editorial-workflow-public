@@ -1,4 +1,3 @@
-# Copyright (c) 2026 rui-rc. See LICENSE and NOTICE.
 """Run with python -i. Keeps one WebDriver for import, inspection and edits.
 Requires the pinned all-to-xiumi 0.1.0 source described in importer-setup.md.
 Does not read or copy credentials. Commands operate only in this browser.
@@ -87,7 +86,18 @@ def classify_save_state(state):
     return None
 
 
+def dismiss_preview(driver):
+    """Close only the observed preview overlay; leave other dialogs untouched."""
+    visible = lambda d: [e for e in d.find_elements(By.CSS_SELECTOR, 'iframe.preview-frame') if e.is_displayed()]
+    if not visible(driver):
+        return
+    mask = driver.find_element(By.CSS_SELECTOR, '.modal-dialog .background-mask.paper')
+    driver.execute_script('arguments[0].click()', mask)
+    WebDriverWait(driver, 10, poll_frequency=.2).until(lambda d: not visible(d))
+
+
 def save(driver, timeout=40):
+    dismiss_preview(driver)
     button=driver.find_element(By.CSS_SELECTOR,'button.btn-img.op-btn.save')
     signature=_signature(snapshot(driver),_metadata(driver))
     if draft_id(driver.current_url) and signature==getattr(driver,'_wf_confirmed_signature',None):
@@ -142,6 +152,7 @@ def import_new(driver, html_path, title, checkpoint=None, plan_sha256=None):
     digest=hashlib.sha256(path.read_bytes()).hexdigest()
     if checkpoint is not None and Path(checkpoint).exists():
         raise RuntimeError('This run already started; resume its recorded draft instead of creating another')
+    dismiss_preview(driver)
     _checkpoint(checkpoint,phase='starting',source_sha256=digest,plan_sha256=plan_sha256,title=title)
     if checkpoint is not None:driver._wf_checkpoint=str(checkpoint)
     try:
@@ -232,6 +243,10 @@ def capture_saved_preview(driver, output, width=430, expected_text=None):
         driver.execute_script('window.scrollTo(0,document.body.scrollHeight)')
         WebDriverWait(driver,30).until(lambda d:d.execute_script("const imgs=[...document.images].filter(i=>i.clientWidth>0);return imgs.length>=3&&imgs.every(i=>i.complete&&i.naturalWidth>0)"))
         driver.execute_script('window.scrollTo(0,0)')
+        # The preview fades in after text/images load. A mid-transition screenshot
+        # incorrectly makes the saved colors look washed out; ignore looping art.
+        WebDriverWait(driver,10,poll_frequency=.2).until(lambda d:d.execute_script(
+            "return document.getAnimations().every(a=>a.playState!=='running'||a.effect?.getComputedTiming().endTime===Infinity)"))
         size=driver.execute_script('return {height:document.documentElement.scrollHeight,width:document.documentElement.scrollWidth}')
         if size['height']>30000 or size['width']>width+1:
             raise RuntimeError('Preview exceeds expected page bounds: '+str(size))
@@ -240,6 +255,7 @@ def capture_saved_preview(driver, output, width=430, expected_text=None):
         return {'path':str(target),'source':'saved_xiumi_preview','width':width,'height':size['height']}
     finally:
         driver.close();driver.switch_to.window(editor)
+        dismiss_preview(driver)
 
 
 def main():

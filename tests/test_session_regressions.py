@@ -1,4 +1,3 @@
-# Copyright (c) 2026 rui-rc. See LICENSE and NOTICE.
 """Offline safety regressions; mocks never connect to a real browser/account."""
 import copy
 import importlib.util
@@ -61,7 +60,8 @@ def edit_driver(texts):
 
 
 class SessionRegressions(unittest.TestCase):
-    def test_title_only_change_is_saved(self):
+    @patch.object(SESSION, 'dismiss_preview')
+    def test_title_only_change_is_saved(self, _dismiss):
         driver = Mock()
         driver.current_url = "https://xiumi.us/studio/v5#/paper/for/123/cube/0"
         body = [{"html": "<p>unchanged body</p>"}]
@@ -83,7 +83,8 @@ class SessionRegressions(unittest.TestCase):
             with self.subTest(notice=notice):
                 self.assertEqual(SESSION.classify_save_state({"notice": notice}), expected)
 
-    def test_blocked_save_preserves_page_and_prevents_reload(self):
+    @patch.object(SESSION, 'dismiss_preview')
+    def test_blocked_save_preserves_page_and_prevents_reload(self, _dismiss):
         driver = Mock()
         driver.current_url = "https://xiumi.us/studio/v5#/paper/for/new/cube/0"
         driver.execute_script.return_value = {"notice": "图文数量已达上限", "busy": False, "seen": True}
@@ -133,7 +134,8 @@ class SessionRegressions(unittest.TestCase):
         driver.switch_to.active_element.send_keys.assert_not_called()
         self.assertEqual(driver.texts, before)
 
-    def test_loading_page_is_not_captured_as_finished_preview(self):
+    @patch.object(SESSION, 'dismiss_preview')
+    def test_loading_page_is_not_captured_as_finished_preview(self, dismiss):
         driver=Mock()
         driver.current_window_handle='editor'
         frame=Mock()
@@ -147,6 +149,24 @@ class SessionRegressions(unittest.TestCase):
         self.assertFalse(any(c.args[0]=='Page.captureScreenshot' for c in driver.execute_cdp_cmd.call_args_list))
         driver.close.assert_called_once()
         driver.switch_to.window.assert_called_with('editor')
+        dismiss.assert_called_once_with(driver)
+
+    def test_preview_overlay_is_closed_before_save(self):
+        driver = Mock()
+        frame = Mock()
+        frame.is_displayed.side_effect = [True, False]
+        driver.find_elements.return_value = [frame]
+        with patch.object(SESSION, 'WebDriverWait', OnePollWait):
+            SESSION.dismiss_preview(driver)
+        driver.find_element.assert_called_once_with(SESSION.By.CSS_SELECTOR, '.modal-dialog .background-mask.paper')
+        driver.execute_script.assert_called_once_with('arguments[0].click()', driver.find_element.return_value)
+
+    def test_other_dialogs_are_not_dismissed(self):
+        driver = Mock()
+        driver.find_elements.return_value = []
+        SESSION.dismiss_preview(driver)
+        driver.find_element.assert_not_called()
+        driver.execute_script.assert_not_called()
 
 
 if __name__ == "__main__":

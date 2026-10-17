@@ -1,4 +1,3 @@
-# Copyright (c) 2026 rui-rc. See LICENSE and NOTICE.
 """Compose small editable components and an independent source-of-truth plan."""
 import argparse
 import hashlib
@@ -51,9 +50,7 @@ def load_brand():
 def compose(data, output, base_dir=None):
     assets = load_brand()
     rows, extra, missing = credit_contract(data)
-    for row in rows + extra:
-        if not row['value']:
-            row['value'] = '待确认'
+    # Preserve deliberate blanks in drafts; missing assignments stay in the report.
     spacing = data.get('letter_spacing', 0)
     if isinstance(spacing, bool) or spacing not in (0, 1):
         raise ValueError('letter_spacing must be 0 or 1')
