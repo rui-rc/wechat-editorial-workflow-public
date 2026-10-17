@@ -13,3 +13,7 @@ selenium-cache/
 
 # Institutional assets are fetched locally, never redistributed here.
 wechat-editorial-workflow/requirements/assets/
+
+review-handoff/
+test-run/
+agy-tasks/
