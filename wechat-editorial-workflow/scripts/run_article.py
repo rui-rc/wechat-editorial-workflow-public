@@ -1,4 +1,3 @@
-# Copyright (c) 2026 rui-rc. See LICENSE and NOTICE.
 """One task runner: one durable draft, authored-plan verification, recoverable evidence."""
 import argparse
 import hashlib
@@ -52,6 +51,10 @@ def publish_and_check(driver, html_path, plan_path, title, checkpoint, capture=T
         result['draft_url']=url
         if capture:
             result['preview']=capture_saved_preview(driver,checkpoint.with_suffix('.preview.png'))
+            clipped=result['preview'].get('layout',{}).get('potential_text_clipping',[])
+            if clipped:
+                raise RuntimeError('Saved preview needs visual review: text may be clipped: '+
+                                   '; '.join(x.get('text','')[:80] for x in clipped[:3]))
         # Human preference/approval is distinct from machine layout verification.
         result['status']='layout_verified_visual_review_pending' if result['ready_for_review'] else 'draft_layout_verified_pending_credits'
         checkpoint.with_suffix('.audit.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')

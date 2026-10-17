@@ -1,4 +1,3 @@
-# Copyright (c) 2026 rui-rc. See LICENSE and NOTICE.
 """Runner verdict and resume safeguards; all browser/network work is mocked."""
 import hashlib
 import importlib.util
@@ -97,6 +96,22 @@ class RunnerRegressions(unittest.TestCase):
         self.assertFalse(report.exists())
         self.assertEqual(json.loads(self.checkpoint.with_suffix('.failure.json').read_text(encoding='utf-8'))['status'],'failed')
         self.assertEqual(len(list(report.parent.glob('run.audit.previous-*.json'))),1)
+
+    def test_preview_clipping_blocks_success_even_when_editor_audit_passes(self):
+        preview={'layout':{'potential_text_clipping':[{'text':'合成长标题超出可见边界'}]}}
+        with patch.object(RUNNER,'capture_saved_preview',return_value=preview):
+            with self.assertRaisesRegex(RuntimeError,'text may be clipped'):
+                RUNNER.publish_and_check(self.driver,self.html,self.plan,'Synthetic',self.checkpoint)
+        self.assert_needs_attention()
+        self.import_new.assert_not_called()
+
+    def test_intentional_horizontal_scroller_remains_for_visual_review(self):
+        preview={'layout':{'potential_text_clipping':[],
+                           'horizontal_scroll_regions':[{'width':300,'scrollWidth':600,'requires_interaction_check':True}]}}
+        with patch.object(RUNNER,'capture_saved_preview',return_value=preview):
+            result=RUNNER.publish_and_check(self.driver,self.html,self.plan,'Synthetic',self.checkpoint)
+        self.assertEqual(result['status'],'layout_verified_visual_review_pending')
+        self.assertTrue(result['preview']['layout']['horizontal_scroll_regions'][0]['requires_interaction_check'])
 
 
 if __name__ == "__main__":

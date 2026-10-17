@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from same_session import snapshot
 
@@ -23,9 +24,20 @@ def select_component_anchor(driver, text):
       throw Error('Nested text is not a top-level anchor; select the group in layout mode');
     cells[0].scrollIntoView({block:'center'});return cells[0];
     """, text)
-    cell.click()
-    WebDriverWait(driver,10,poll_frequency=.2).until(lambda d:d.execute_script(
-        "return arguments[0].closest('.tn-comp-top-level').classList.contains('tn-on-editing')",cell))
+    ActionChains(driver).move_to_element(cell).perform()
+    # Select the component itself, not a descendant at its visual center.
+    # Center clicks can enter text or miss while the editor is scrolling.
+    driver.execute_script("""
+    document.activeElement?.blur();
+    const root=arguments[0].closest('.tn-comp-top-level');
+    for(const type of ['mousedown','mouseup','click'])
+      root.dispatchEvent(new MouseEvent(type,{bubbles:true,button:0}));
+    """,cell)
+    WebDriverWait(driver,10,poll_frequency=.2).until(lambda d:d.execute_script("""
+        const cs=[...document.querySelectorAll('div[contenteditable="true"]')]
+          .filter(e=>e.offsetWidth>0&&e.textContent===arguments[0]);
+        return cs.length===1&&cs[0].closest('.tn-comp-top-level')?.classList.contains('tn-on-editing');
+        """,text))
     # A first click selects a component; a second click may enter its text.
     # Escape in selection mode would deselect the anchor entirely.
     if driver.execute_script('return document.activeElement.isContentEditable'):

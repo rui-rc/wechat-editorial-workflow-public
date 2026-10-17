@@ -155,6 +155,7 @@ def import_new(driver, html_path, title, checkpoint=None, plan_sha256=None):
     dismiss_preview(driver)
     _checkpoint(checkpoint,phase='starting',source_sha256=digest,plan_sha256=plan_sha256,title=title)
     if checkpoint is not None:driver._wf_checkpoint=str(checkpoint)
+    url=''
     try:
         html,base=xp._resolve_content_paths(path,'')
         html=xp._prepare_xiumi_images(html,base)
@@ -164,8 +165,8 @@ def import_new(driver, html_path, title, checkpoint=None, plan_sha256=None):
         xp._fill_xiumi_fields(driver,title,'','','')
         xp._paste_xiumi_html(driver,'<section><p>排版准备中（非成稿）</p></section>')
         save(driver)
-        WebDriverWait(driver,40,poll_frequency=.25).until(lambda d:draft_id(d.current_url))
-        url=driver.current_url
+        url=WebDriverWait(driver,40,poll_frequency=.25).until(
+            lambda d: current if draft_id(current:=d.current_url) else False)
         _checkpoint(checkpoint,phase='reserved',draft_url=url,draft_id=draft_id(url))
         # Only the draft just reserved by this call may be filled wholesale.
         xp._fill_xiumi_body_then_images(driver,html,base,preserve_styles=True)
@@ -176,7 +177,11 @@ def import_new(driver, html_path, title, checkpoint=None, plan_sha256=None):
         _checkpoint(checkpoint,phase='save_observed')
         return url
     except Exception as exc:
-        url=getattr(driver,'current_url','')
+        # A disconnected browser must not erase the reserved draft or mask the
+        # original failure with a second error from reading current_url.
+        if not url:
+            try:url=driver.current_url
+            except Exception:pass
         _checkpoint(checkpoint,phase='blocked',draft_url=url,draft_id=draft_id(url),error=str(exc))
         raise
 
@@ -206,18 +211,59 @@ def replace_paragraph(driver, old, new, plan=None, backup_path=None):
     if backup_path is not None:
         target=Path(backup_path);target.parent.mkdir(parents=True,exist_ok=True)
         target.write_text(json.dumps({'url':driver.current_url,'metadata':_metadata(driver),'components':snapshot(driver),'plan':plan},ensure_ascii=False,indent=2),encoding='utf-8')
-    chosen=driver.execute_script("""const ps=[...document.querySelectorAll('div[contenteditable="true"]')].filter(e=>e.offsetWidth>0).flatMap(c=>[...c.querySelectorAll('p')]);
-    const p=ps[arguments[0]],e=p.closest('[contenteditable="true"]');
+    target=driver.execute_script("""const ps=[...document.querySelectorAll('div[contenteditable="true"]')].filter(e=>e.offsetWidth>0).flatMap(c=>[...c.querySelectorAll('p')]);
+    const p=ps[arguments[0]];
+    if(!p||p.textContent!==arguments[1]||ps.filter(n=>n.textContent===arguments[1]).length!==1)
+      return {ok:false,reason:'target paragraph changed'};
     if(p.children.length)return {ok:false,reason:'rich-text paragraph needs scoped native editing'};
+    return {ok:true,element:p};""",index,old)
+    if not target.get('ok'):
+        raise RuntimeError('Target activation is not safe: '+str(target))
+    target['element'].click()
+    # Clicking activates nested native editors and can replace their DOM nodes.
+    # Re-query by the confirmed index/text; never reuse the clicked element.
+    chosen=driver.execute_script("""const ps=[...document.querySelectorAll('div[contenteditable="true"]')].filter(e=>e.offsetWidth>0).flatMap(c=>[...c.querySelectorAll('p')]);
+    const p=ps[arguments[0]];
+    if(!p||p.textContent!==arguments[1]||ps.filter(n=>n.textContent===arguments[1]).length!==1)
+      return {ok:false,reason:'target paragraph changed after activation'};
+    if(p.children.length)return {ok:false,reason:'rich-text paragraph needs scoped native editing'};
+    const e=p.closest('[contenteditable="true"]');
     e.focus();const r=document.createRange();r.selectNodeContents(p);const s=window.getSelection();s.removeAllRanges();s.addRange(r);
     return {ok:document.activeElement===e&&s.toString()===arguments[1]};""",index,old)
     if not chosen.get('ok'):
         raise RuntimeError('Target selection is not safe: '+str(chosen))
     expected=before.copy();expected[index]=new
+    driver._wf_save_uncertain=True
     driver.switch_to.active_element.send_keys(new if new else Keys.BACKSPACE)
     # Native input can re-render the paragraph. Re-read it instead of using a stale element.
     WebDriverWait(driver,10,poll_frequency=.2).until(lambda d:_paragraphs(d)==expected)
     return {'before':before,'expected':expected,'updated_plan':updated,'backup_path':str(backup_path) if backup_path else None}
+
+
+def inspect_preview_layout(driver):
+    """Flag clipped prose, while separating intentional horizontal scrollers."""
+    return driver.execute_script("""
+    const width=document.documentElement.clientWidth,findings=[],scrolls=[];
+    for(const p of document.querySelectorAll('p')){
+      if(!p.textContent.trim()||!p.offsetWidth||!p.offsetHeight)continue;
+      let left=0,right=width,scrolling=false;
+      for(let n=p.parentElement;n;n=n.parentElement){
+        const s=getComputedStyle(n),r=n.getBoundingClientRect();
+        if(/auto|scroll/.test(s.overflowX)&&n.scrollWidth>n.clientWidth+1){
+          scrolling=true;if(!scrolls.includes(n))scrolls.push(n);break;
+        }
+        if(/hidden|clip/.test(s.overflowX)){left=Math.max(left,r.left);right=Math.min(right,r.right);}
+      }
+      if(scrolling)continue;
+      const range=document.createRange();range.selectNodeContents(p);
+      const rects=[...range.getClientRects()].filter(r=>r.width>0&&r.height>0);
+      if(rects.some(r=>r.left<left-1||r.right>right+1))findings.push({
+        text:p.textContent.slice(0,120),visibleLeft:left,visibleRight:right,
+        textLeft:Math.min(...rects.map(r=>r.left)),textRight:Math.max(...rects.map(r=>r.right))});
+    }
+    return {potential_text_clipping:findings,horizontal_scroll_regions:scrolls.map(n=>({
+      width:n.clientWidth,scrollWidth:n.scrollWidth,requires_interaction_check:true}))};
+    """)
 
 
 def capture_saved_preview(driver, output, width=430, expected_text=None):
@@ -252,7 +298,8 @@ def capture_saved_preview(driver, output, width=430, expected_text=None):
             raise RuntimeError('Preview exceeds expected page bounds: '+str(size))
         shot=driver.execute_cdp_cmd('Page.captureScreenshot',{'format':'png','captureBeyondViewport':True,'clip':{'x':0,'y':0,'width':width,'height':size['height'],'scale':1}})
         target=Path(output);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(base64.b64decode(shot['data']))
-        return {'path':str(target),'source':'saved_xiumi_preview','width':width,'height':size['height']}
+        return {'path':str(target),'source':'saved_xiumi_preview','width':width,'height':size['height'],
+                'layout':inspect_preview_layout(driver)}
     finally:
         driver.close();driver.switch_to.window(editor)
         dismiss_preview(driver)

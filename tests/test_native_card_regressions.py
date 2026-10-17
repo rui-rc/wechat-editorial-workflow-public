@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+from selenium.common.exceptions import StaleElementReferenceException
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "wechat-editorial-workflow/scripts/native_cards.py"
@@ -46,6 +47,27 @@ class NativeCardRegressions(unittest.TestCase):
         self.driver.execute_script.assert_not_called()
         self.driver.execute_cdp_cmd.assert_not_called()
         self.assertFalse(self.backup.exists())
+
+    def test_anchor_wait_requeries_after_selection_rerenders(self):
+        element=Mock()
+        invalidated=False
+        def execute(script,*args):
+            nonlocal invalidated
+            if 'scrollIntoView' in script:
+                return element
+            if 'dispatchEvent' in script:
+                invalidated=True
+                return None
+            if invalidated and any(arg is element for arg in args):
+                raise StaleElementReferenceException('Old anchor was replaced')
+            if script=='return document.activeElement.isContentEditable':
+                return False
+            self.assertEqual(args,('唯一锚点',))
+            return True
+        self.driver.execute_script.side_effect=execute
+        with patch.object(NATIVE,'ActionChains'),patch.object(NATIVE,'WebDriverWait',OnePollWait):
+            NATIVE.select_component_anchor(self.driver,'唯一锚点')
+        self.assertTrue(invalidated)
 
     def test_text_split_across_runs_is_rejected_before_input(self):
         before = [cell("分开排版", "<p><strong>分开</strong><span>排版</span></p>")]
